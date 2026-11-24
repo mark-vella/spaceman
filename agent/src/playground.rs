@@ -78,6 +78,7 @@ pub(crate) fn blank_fixture() -> Ui {
         error: None,
         spacing_draft: None,
         per_edge: None,
+        layout_display: None,
         shortcut_capture: panes::shortcuts::Capture::Idle,
         fixture: true,
     };
@@ -92,6 +93,7 @@ pub(crate) fn reset_fixture(ui: &mut Ui, pane: Pane) {
     ui.hud_preview = None;
     ui.spacing_draft = None;
     ui.per_edge = None;
+    ui.layout_display = None;
     ui.displays = panes::workspaces::fixture_pair();
     ui.displays_at = None;
     ui.highlight_lab = None;
@@ -152,6 +154,8 @@ mod tests {
             "General/general-setup",
             "Layout/layout",
             "Layout/layout-spaced",
+            "Layout/layout-displays",
+            "Layout/layout-display-override",
             "Rules/rules",
             "Rules/rules-drag",
             "Rules/rules-add",

@@ -26,7 +26,8 @@ The complete example is [config.example.toml](../config.example.toml).
 
 The parser rejects unknown fields. The root must contain `version = 1` and may contain an optional
 `[settings]` table, an optional `[shortcuts]` table (see [Shortcuts](#shortcuts)), an optional
-`[labs]` table (see [Labs](#labs)), plus repeated `[[rules]]` and `[[workspaces]]` tables.
+`[labs]` table (see [Labs](#labs)), plus repeated `[[rules]]`, `[[workspaces]]`, and `[[displays]]`
+tables.
 
 ```toml
 version = 1
@@ -63,6 +64,10 @@ workspace = "D"                       # named workspace A through Z
 [[workspaces]]
 workspace = 9                         # 1 through 10 or "A" through "Z"; unique
 monitor = "main"                      # non-empty selector
+
+[[displays]]
+monitor = "M34WQ"                     # non-empty selector, as for [[workspaces]]; unique
+single_window_max_width = 2670        # required; this display's own width (0 fills it)
 ```
 
 A rule needs at least one of `bundle_id` or `title`. If both are present, both must match exactly.
@@ -103,6 +108,34 @@ ultrawide displays, where one full-width window is hard to read.
 Out-of-range values are rejected with a message naming the key and its range, like any other invalid
 configuration. Every key defaults to `0`, so a file without them tiles exactly as before.
 
+### Per-Display Width
+
+A `[[displays]]` entry gives the displays its `monitor` selects their own single-window width, so a
+lone window can fill a laptop screen while it stays centered at a capped width on an ultrawide:
+
+```toml
+[settings]
+single_window_max_width = 1680      # every display, unless overridden below
+
+[[displays]]
+monitor = "Built-in Retina Display" # main | secondary | a display UUID | an exact display name
+single_window_max_width = 0         # this display: a lone window fills it
+
+[[displays]]
+monitor = "M34WQ"
+single_window_max_width = 2670
+```
+
+`monitor` takes the same selectors as [Display Assignments](#display-assignments). For each
+display, entries are checked in file order and the first whose selector picks that display wins; a
+display no entry picks uses `settings.single_window_max_width`. Unlike a workspace assignment, an
+entry never falls back to the main display: one whose display is not connected changes nothing, and
+applies again when the display returns. The width follows the display, so a workspace moved to
+another display takes that display's width. `single_window_max_width` takes the same values as the
+global key, and `0` turns the cap off on that display even when the global key sets one. An entry
+without `single_window_max_width`, an empty `monitor`, two entries with the same `monitor` text, or
+an unknown key is a config error. Gaps stay global.
+
 Settings › Layout edits the same keys over a live miniature of the result. One **Window gaps**
 slider sets `inner` and all four edges together; **Customize separately** (open on its own when the
 file's gaps differ) sets between windows, all screen edges, and each edge on its own.
@@ -114,6 +147,16 @@ spaceman config set gaps.top 32
 spaceman config set single_window_max_width 1680
 spaceman config get gaps.inner
 ```
+
+Settings › Layout's **Display** picker chooses what the **Single-window width** control edits: **All
+displays** (`settings.single_window_max_width`) or one connected display, whose width it saves in
+that display's `[[displays]]` entry (a new entry names the display, or its UUID when another
+connected display shares the name). **Follow All displays** removes the display's width again.
+Entries for displays that aren't connected, and comments, stay in the file untouched.
+`spaceman config show` lists `[[displays]]` (text and `--json`) and `spaceman config check`
+validates them; `spaceman config set` edits only the global width, so edit `[[displays]]` in the file
+or in Settings. Saves from Settings, the CLI and `Option+Shift+Tab` keep every `[[displays]]` entry
+in order.
 
 ## Shortcuts
 
@@ -293,8 +336,8 @@ normal recovery data.
 
 Edits saved in Spaceman Settings or in an external editor take effect automatically: rule changes,
 workspace display assignments, `settings.hud`, `settings.hud_style`,
-`settings.mouse_follows_focus`, `settings.gaps`, and
-`settings.single_window_max_width` reload without restarting (Settings › Layout retiles at once; an
+`settings.mouse_follows_focus`, `settings.gaps`,
+`settings.single_window_max_width`, and `[[displays]]` reload without restarting (Settings › Layout retiles at once; an
 external edit applies on the next retile);
 `settings.update_channel` applies at the next update check. Global shortcuts for a
 newly added named workspace letter (`Option+A` ... `Option+Z`) register on the next app start:

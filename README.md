@@ -115,7 +115,7 @@ with their apps' icons); choosing one switches to it. The menu actions are `Setu
 Accessibility is missing), `Pause Tiling` (or `Resume Tiling` while paused), `Workspace HUD`,
 `Launch at Login`, `Settings...` (`⌘,`), `Check for Updates...`, and `Quit Spaceman` (`⌘Q`). Settings
 includes `General`, `Layout` (window gaps, screen-edge padding, and a single-window width for wide
-displays, over a live preview), `Rules`, `Workspaces`, `Shortcuts`, and `Activity` (title-free arrangement
+displays, for all displays or one display at a time, over a live preview), `Rules`, `Workspaces`, `Shortcuts`, and `Activity` (title-free arrangement
 diagnostics and process vitals). If macOS requires approval, the login item action opens **System
 Settings > General > Login Items & Extensions**.
 

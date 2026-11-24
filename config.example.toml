@@ -64,6 +64,13 @@ monitor = "main"
 workspace = "D"
 monitor = "main"
 
+# Per-display overrides are optional. monitor takes the selectors [[workspaces]] takes; for each
+# display the first entry that selects it wins, and an entry whose display isn't connected
+# changes nothing. single_window_max_width replaces the [settings] value there (0 fills it).
+[[displays]]
+monitor = "Built-in Retina Display"
+single_window_max_width = 0
+
 # Shortcuts are optional and left commented out, so copying this file keeps every
 # built-in shortcut. Bindings use `spaceman ctl` commands and replace the built-in
 # shortcut on the same chord; "none" unbinds one. Set defaults = false to register

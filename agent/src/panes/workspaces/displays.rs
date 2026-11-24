@@ -2,7 +2,7 @@
 //! the exact `config.toml` selector the engine resolves (the same one Option+Shift+Tab writes).
 
 use spaceman::Rect;
-use spaceman::macos::DisplayOutputs;
+use spaceman::macos::{DisplayOutput, DisplayOutputs};
 
 /// The built-in selector for the display macOS marks as main.
 pub(crate) const MAIN: &str = "main";
@@ -46,6 +46,37 @@ pub(crate) fn connected(outputs: &DisplayOutputs) -> Vec<ConnectedDisplay> {
             }
         })
         .collect()
+}
+
+/// `displays` as the engine sees them, so a selector picks the same display here as there.
+pub(crate) fn outputs(displays: &[ConnectedDisplay]) -> Option<DisplayOutputs> {
+    DisplayOutputs::new(
+        displays
+            .iter()
+            .map(|display| DisplayOutput {
+                id: display.id.clone(),
+                name: display.name.clone(),
+                frame: display.frame,
+                is_main: display.is_main,
+            })
+            .collect(),
+    )
+    .ok()
+}
+
+/// The `monitor` Settings writes in a new `[[displays]]` entry: the display's own name while no
+/// other connected display shares it, else its UUID. Unlike `main` or `secondary`, both stay
+/// with the screen when another display becomes main.
+pub(crate) fn monitor_for(outputs: &DisplayOutputs, display: &DisplayOutput) -> String {
+    let shared = outputs
+        .displays()
+        .iter()
+        .any(|other| other.id != display.id && other.name == display.name);
+    if display.name.trim().is_empty() || shared {
+        display.id.clone()
+    } else {
+        display.name.clone()
+    }
 }
 
 /// One segment of a workspace's display picker and one section of the pane.
@@ -230,6 +261,20 @@ pub(crate) fn fixture_pair() -> Vec<ConnectedDisplay> {
             is_secondary: true,
         },
     ]
+}
+
+/// A MacBook's built-in main display and a 34-inch ultrawide to its right.
+pub(crate) fn fixture_laptop_and_ultrawide() -> Vec<ConnectedDisplay> {
+    let mut displays = fixture_pair();
+    displays[1].id = "6E1F2A3B-4C5D-4E6F-8091-A2B3C4D5E6F7".to_owned();
+    displays[1].name = "M34WQ".to_owned();
+    displays[1].frame = Rect {
+        x: 1728,
+        y: 0,
+        width: 3440,
+        height: 1440,
+    };
+    displays
 }
 
 /// The third display's UUID in the Playground's three-display scene.

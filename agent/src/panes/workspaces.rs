@@ -3,7 +3,8 @@
 mod displays;
 
 pub(crate) use displays::{
-    ConnectedDisplay, THIRD_FIXTURE_ID, fixture_pair, fixture_quad, fixture_three,
+    ConnectedDisplay, THIRD_FIXTURE_ID, fixture_laptop_and_ultrawide, fixture_pair, fixture_quad,
+    fixture_three, monitor_for, outputs,
 };
 
 use rune::{El, Tx, col, row, text};
@@ -40,10 +41,10 @@ fn effective_monitor(doc: &Doc, workspace: WorkspaceId) -> String {
         .unwrap_or_else(|| default_monitor(workspace).to_owned())
 }
 
-/// Reads the connected displays when Settings › Workspaces is on screen, about once a second, so
-/// plugging a display in shows its segment without reopening Settings.
+/// Reads the connected displays when Settings › Workspaces or Layout is on screen, about once a
+/// second, so plugging a display in shows its segment without reopening Settings.
 pub(crate) fn poll_displays(ui: &mut Ui, clock: f64) -> bool {
-    if ui.fixture || ui.pane != Pane::Workspaces {
+    if ui.fixture || !matches!(ui.pane, Pane::Workspaces | Pane::Layout) {
         return false;
     }
     if ui

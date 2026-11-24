@@ -163,6 +163,32 @@ pub(crate) const SCENES: &[Scene] = &[
             });
         });
     }),
+    // A laptop and an ultrawide: the width picker edits every display at once.
+    ("layout-displays", |ui| {
+        reset_fixture(ui, Pane::Layout);
+        ui.displays = workspaces::fixture_laptop_and_ultrawide();
+        ui.edit(|doc| {
+            doc.set_spacing(spaceman::spacing::Spacing {
+                single_window_max_width: 1680,
+                ..spaceman::spacing::Spacing::NONE
+            })
+        });
+    }),
+    // The ultrawide picked, holding its own width while the laptop fills.
+    ("layout-display-override", |ui| {
+        reset_fixture(ui, Pane::Layout);
+        ui.displays = workspaces::fixture_laptop_and_ultrawide();
+        ui.edit(|doc| {
+            doc.set_spacing(spaceman::spacing::Spacing {
+                single_window_max_width: 1680,
+                ..spaceman::spacing::Spacing::NONE
+            })
+        });
+        let (laptop, ultrawide) = (ui.displays[0].id.clone(), ui.displays[1].id.clone());
+        ui.set_display_width(&laptop, Some(0));
+        ui.set_display_width(&ultrawide, Some(1920));
+        ui.layout_display = Some(ultrawide);
+    }),
     ("workspaces", |ui| reset_fixture(ui, Pane::Workspaces)),
     // A third monitor: workspace 9 assigned to it, its segment in every row's picker.
     ("workspaces-three-displays", |ui| {

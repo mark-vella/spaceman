@@ -1,7 +1,8 @@
 //! Layout pane: one gap for everything by default, or the space between tiled windows and each
-//! screen edge on its own, and the width a lone window keeps on a wide display, under a live
-//! miniature of the result.
+//! screen edge on its own, and the width a lone window keeps on a wide display, for every display
+//! or one display at a time, under a live miniature of the result.
 
+mod displays;
 mod preview;
 mod slider;
 
@@ -134,30 +135,53 @@ pub fn pane(ui: &Ui, p: Paint) -> El {
         .gap(8.0)
         .child(controls::heading(p, "header", "Gaps", None))
         .child(gaps_card);
+    let picked = displays::picked(ui);
+    let (caption, current) = match &picked {
+        Some(picked) => (displays::width_caption(picked), picked.width),
+        None => (
+            "A window alone on its display, and Fullscreen Layout, is centered at this width."
+                .to_owned(),
+            spacing.single_window_max_width,
+        ),
+    };
     let width = apply_highlight(
         controls::setting_row(
             p,
             "single-width",
             "Single-window width",
-            Some((
-                "A window alone on its display, and Fullscreen Layout, is centered at this width."
-                    .to_owned(),
-                p.muted(),
-            )),
-            width_picker(p, spacing.single_window_max_width),
+            Some((caption, p.muted())),
+            width_picker(
+                p,
+                current,
+                picked.as_ref().map(|picked| picked.display.id.clone()),
+            ),
         ),
         p,
         target,
         Highlight::MaxWidth,
     );
+    let wide: Vec<El> = displays::picker_row(p, ui)
+        .into_iter()
+        .chain([width])
+        .chain(
+            picked
+                .as_ref()
+                .and_then(|picked| displays::follow_row(p, picked)),
+        )
+        .collect();
+    let single = picked.as_ref().map(|picked| preview::Single {
+        label: picked.label.clone(),
+        screen: picked.display.frame,
+        width: picked.width,
+    });
     scroll_body(
         "layout-body",
         col()
             .key("sections")
             .gap(24.0)
-            .child(preview::card(p, spacing))
+            .child(preview::card(p, spacing, single))
             .child(gaps)
-            .child(controls::section(p, "wide", "Wide displays", vec![width])),
+            .child(controls::section(p, "wide", "Wide displays", wide)),
     )
 }
 
@@ -264,19 +288,26 @@ fn width_options(current: i32) -> (Vec<(String, i32)>, usize) {
     (options, selected)
 }
 
-fn width_picker(p: Paint, current: i32) -> El {
+/// The widths on offer, setting the width for all displays, or `display`'s own when given.
+fn width_picker(p: Paint, current: i32, display: Option<String>) -> El {
     let (options, selected) = width_options(current);
     let labels: Vec<String> = options.iter().map(|(label, _)| label.clone()).collect();
     let widths: Vec<i32> = options.iter().map(|(_, width)| *width).collect();
     SegmentedControl::new(&labels, Some(selected))
         .fit()
         .on_pick(move |ui: &mut Ui, index, _: &mut Tx| {
-            if let Some(width) = widths.get(index) {
-                let base = ui.doc.spacing();
-                ui.set_spacing(Spacing {
-                    single_window_max_width: *width,
-                    ..base
-                });
+            let Some(&width) = widths.get(index) else {
+                return;
+            };
+            match &display {
+                Some(display) => ui.set_display_width(display, Some(width)),
+                None => {
+                    let base = ui.doc.spacing();
+                    ui.set_spacing(Spacing {
+                        single_window_max_width: width,
+                        ..base
+                    });
+                }
             }
         })
         .build(p.k)

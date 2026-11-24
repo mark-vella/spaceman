@@ -65,9 +65,17 @@ pub(super) fn three_tiles(spacing: Spacing, display: Rect) -> Vec<Rect> {
         .collect()
 }
 
-/// The preview card: the three-window display, joined by an ultrawide holding one capped window
-/// while a single-window width is set.
-pub(super) fn card(p: Paint, spacing: Spacing) -> El {
+/// The display picked on Settings › Layout, drawn holding one window at its width.
+pub(super) struct Single {
+    pub label: String,
+    /// The display's frame; only its size is drawn.
+    pub screen: Rect,
+    pub width: i32,
+}
+
+/// The preview card: the three-window display, joined by the picked display holding one window,
+/// or else by an ultrawide holding one capped window while a single-window width is set.
+pub(super) fn card(p: Paint, spacing: Spacing, single: Option<Single>) -> El {
     let mut displays = row()
         .key("displays")
         .gap(28.0)
@@ -81,7 +89,26 @@ pub(super) fn card(p: Paint, spacing: Spacing) -> El {
             DISPLAY_WIDTH,
             &three_tiles(spacing, DISPLAY),
         ));
-    if spacing.single_window_max_width > 0 {
+    if let Some(single) = single {
+        let screen = Rect {
+            x: 0,
+            y: 0,
+            ..single.screen
+        };
+        let spacing = Spacing {
+            single_window_max_width: single.width,
+            ..spacing
+        };
+        let height = ULTRAWIDE_WIDTH * ULTRAWIDE.height as f32 / ULTRAWIDE.width as f32;
+        displays = displays.child(display(
+            p,
+            "single",
+            &format!("One window on {}", single.label),
+            screen,
+            (height * screen.width as f32 / screen.height.max(1) as f32).min(DISPLAY_WIDTH),
+            &[spacing.single(spacing.usable(screen))],
+        ));
+    } else if spacing.single_window_max_width > 0 {
         displays = displays.child(display(
             p,
             "single",

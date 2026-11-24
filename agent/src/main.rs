@@ -73,6 +73,9 @@ pub struct Ui {
     pub(crate) spacing_draft: Option<spaceman::spacing::Spacing>,
     /// Whether the four edge sliders show, once someone opened or closed them.
     pub(crate) per_edge: Option<bool>,
+    /// The connected display whose own single-window width Settings › Layout edits, by ID;
+    /// `None` edits the width for all displays.
+    pub(crate) layout_display: Option<String>,
     /// Settings › Shortcuts' recorder.
     pub(crate) shortcut_capture: panes::shortcuts::Capture,
     /// Scenes render fixed data and ignore the live agent and file.
@@ -111,6 +114,7 @@ impl Ui {
             error: None,
             spacing_draft: None,
             per_edge: None,
+            layout_display: None,
             shortcut_capture: panes::shortcuts::Capture::Idle,
             fixture: false,
         };
@@ -268,6 +272,32 @@ impl Ui {
             return;
         }
         self.edit(|doc| doc.set_spacing(spacing));
+        if self.error.is_none() {
+            self.send_action(UiAction::Retile);
+        }
+    }
+
+    /// Saves `display`'s own single-window width in `[[displays]]`, or with `None` removes it so
+    /// the display follows the width for all displays again, then retiles.
+    pub fn set_display_width(&mut self, display: &str, width: Option<i32>) {
+        let Some(outputs) = panes::workspaces::outputs(&self.displays) else {
+            return;
+        };
+        let Some(output) = outputs
+            .displays()
+            .iter()
+            .find(|output| output.id == display)
+        else {
+            return;
+        };
+        let monitor = panes::workspaces::monitor_for(&outputs, output);
+        self.edit(|doc| {
+            doc.set_single_width_on(
+                |selector| outputs.selects(selector, output),
+                &monitor,
+                width,
+            );
+        });
         if self.error.is_none() {
             self.send_action(UiAction::Retile);
         }

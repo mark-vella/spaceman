@@ -41,8 +41,11 @@ Axis                                                    // tile.axis
 Spacing                                                 // tile.spacing
 ├── settings.gaps.inner              -> exactly that many points between neighboring tiles, any nesting
 ├── settings.gaps.top/bottom/left/right -> outer padding; gives way above a 320×240 tiled area
-└── settings.single_window_max_width -> a lone tile (one tiled window, or Fullscreen Layout) centered
-    at that width when the padded area is wider
+├── settings.single_window_max_width -> a lone tile (one tiled window, or Fullscreen Layout) centered
+│   at that width when the padded area is wider
+└── [[displays]] single_window_max_width -> that width on the displays its monitor selects (first
+    match wins, 0 fills; an unplugged display's entry is inert); follows a workspace moved between
+    displays
 ```
 
 ## How To Get To It (User POV)
@@ -51,8 +54,10 @@ Spacing                                                 // tile.spacing
 Keyboard: Option+H/J/K/L, Option+Shift+H/J/K/L, Option+`, Option+-, Option+=, Option+/
 Pointer:  drag a managed window (reorder/nest/move display), drag its edge (resize)
 CLI:      spaceman ctl focus | move-direction | resize | balance | layout | retile
-Settings: Settings › Layout -> Window gaps (Customize separately: Between windows, Screen edges, Top/Bottom/Left/Right), Single-window width
+Settings: Settings › Layout -> Window gaps (Customize separately: Between windows, Screen edges, Top/Bottom/Left/Right), Display (All displays or one display), Single-window width,
+          Follow All displays
 Config:   spaceman config set gaps.inner|gaps.top|gaps.bottom|gaps.left|gaps.right|single_window_max_width <points>
+          [[displays]] monitor + single_window_max_width in config.toml (listed by spaceman config show)
 ```
 
 Input arriving while the worker is busy queues in order (up to 64); queued input is dropped on
@@ -91,6 +96,13 @@ pause, quit, or hotkey loss.
   a pointer resize, keyboard resize and balance through gaps. `src/config.rs` and
   `src/cli/tests.rs` cover parsing, range errors and `spaceman config`;
   `agent/src/rules/tests.rs` covers Settings › Layout saves that keep comments and restore the file.
+- Per-display width: `src/config/displays/tests.rs` (parsing, each error, first match, save
+  round trip), `src/app/tests/per_display.rs` (lone-window and Fullscreen Layout frames on two
+  displays, a workspace moved between them, an entry for an unplugged display),
+  `src/cli/tests/displays.rs` (`config show`, CLI saves, `config check`),
+  `agent/src/rules/displays.rs` and `agent/src/panes/layout/displays.rs` (Settings edits that keep
+  other entries and comments; playground scenes `Layout/layout-displays` and
+  `Layout/layout-display-override`).
 - Fixture replay: `cargo run -- replay fixtures/ghostty-tab-replacement.json` (reconciliation of a
   native-tab replacement, without the runtime).
 - Live harness (not run): `scripts/live-ghostty-tabs.sh` for native-tab slot preservation.
@@ -119,6 +131,10 @@ pause, quit, or hotkey loss.
 - `balance` has no default hotkey; it is CLI-only.
 - With gaps, a drop that lands in the gap between two tiles misses both and leaves the layout as it
   was. The Workspace HUD's layout previews stay schematic and ignore spacing.
+- A `[[displays]]` name selector picks the first connected display with that name, as
+  `[[workspaces]]` does; two identical monitors need their UUIDs to get different widths. Only
+  `single_window_max_width` can differ per display; gaps stay global. `spaceman config set` edits
+  only the global width.
 - A window that enters macOS native fullscreen (for example browser video) loses its slot after two
   seconds and returns as a new tile at the end of the layout
   ([known defect](fullscreen-layout.md#gotchas)).
