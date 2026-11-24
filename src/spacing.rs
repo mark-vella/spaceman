@@ -6,7 +6,11 @@
 //! on every side: neighbors sit exactly `inner` apart, the outermost tiles meet the usable rect
 //! exactly, and equal weights still give equal windows, however deeply the splits nest.
 
+mod single_width;
+
 use serde::{Deserialize, Serialize};
+
+pub use single_width::{MAX_WIDTH_LIMIT, SingleWidth, WidthPercent, WidthPoints};
 
 use crate::Rect;
 
@@ -16,8 +20,6 @@ pub const INNER_MAX: i32 = 48;
 pub const EDGE_MAX: i32 = 128;
 /// Outer padding gives way before the usable rect gets narrower or shorter than this.
 pub const MIN_USABLE: (i32, i32) = (320, 240);
-/// Largest `single_window_max_width`, in points.
-pub const MAX_WIDTH_LIMIT: i32 = 16_384;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -30,11 +32,11 @@ pub struct Spacing {
     pub left: i32,
     pub right: i32,
     /// A lone tile (one tiled window, or Fullscreen Layout) is centered at this width when the
-    /// usable rect is wider; `0` is off.
-    pub single_window_max_width: i32,
+    /// usable rect is wider.
+    pub single_window_max_width: SingleWidth,
 }
 
-/// One spacing setting, as `config.toml`, `spaceman config` and Settings name it.
+/// One gap, as `config.toml`, `spaceman config` and Settings name it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SpacingKey {
     Inner,
@@ -42,21 +44,19 @@ pub enum SpacingKey {
     Bottom,
     Left,
     Right,
-    SingleWindowMaxWidth,
 }
 
 impl SpacingKey {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 5] = [
         Self::Inner,
         Self::Top,
         Self::Bottom,
         Self::Left,
         Self::Right,
-        Self::SingleWindowMaxWidth,
     ];
     pub const EDGES: [Self; 4] = [Self::Top, Self::Bottom, Self::Left, Self::Right];
 
-    /// The key under `[settings]`: `gaps.inner`, `gaps.top`, ... or `single_window_max_width`.
+    /// The key under `[settings]`: `gaps.inner`, `gaps.top`, ...
     #[must_use]
     pub const fn path(self) -> &'static str {
         match self {
@@ -65,20 +65,18 @@ impl SpacingKey {
             Self::Bottom => "gaps.bottom",
             Self::Left => "gaps.left",
             Self::Right => "gaps.right",
-            Self::SingleWindowMaxWidth => "single_window_max_width",
         }
     }
 
-    /// The key inside `[settings.gaps]`, or `None` for `single_window_max_width`.
+    /// The key inside `[settings.gaps]`.
     #[must_use]
-    pub const fn gap_name(self) -> Option<&'static str> {
+    pub const fn gap_name(self) -> &'static str {
         match self {
-            Self::Inner => Some("inner"),
-            Self::Top => Some("top"),
-            Self::Bottom => Some("bottom"),
-            Self::Left => Some("left"),
-            Self::Right => Some("right"),
-            Self::SingleWindowMaxWidth => None,
+            Self::Inner => "inner",
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+            Self::Left => "left",
+            Self::Right => "right",
         }
     }
 
@@ -96,7 +94,6 @@ impl SpacingKey {
             Self::Bottom => spacing.bottom,
             Self::Left => spacing.left,
             Self::Right => spacing.right,
-            Self::SingleWindowMaxWidth => spacing.single_window_max_width,
         }
     }
 
@@ -107,7 +104,6 @@ impl SpacingKey {
             Self::Bottom => spacing.bottom = value,
             Self::Left => spacing.left = value,
             Self::Right => spacing.right = value,
-            Self::SingleWindowMaxWidth => spacing.single_window_max_width = value,
         }
     }
 
@@ -117,17 +113,6 @@ impl SpacingKey {
         let max = match self {
             Self::Inner => INNER_MAX,
             Self::Top | Self::Bottom | Self::Left | Self::Right => EDGE_MAX,
-            Self::SingleWindowMaxWidth => {
-                if value == 0
-                    || (i64::from(MIN_USABLE.0)..=i64::from(MAX_WIDTH_LIMIT)).contains(&value)
-                {
-                    return Ok(value as i32);
-                }
-                return Err(format!(
-                    "settings.{key} must be 0 (off) or between {} and {MAX_WIDTH_LIMIT} px, got {value}",
-                    MIN_USABLE.0
-                ));
-            }
         };
         if (0..=i64::from(max)).contains(&value) {
             Ok(value as i32)
@@ -146,7 +131,7 @@ impl Spacing {
         bottom: 0,
         left: 0,
         right: 0,
-        single_window_max_width: 0,
+        single_window_max_width: SingleWidth::Off,
     };
 
     #[must_use]
@@ -156,7 +141,7 @@ impl Spacing {
             && self.bottom == 0
             && self.left == 0
             && self.right == 0
-            && self.single_window_max_width == 0
+            && self.single_window_max_width.is_off()
     }
 
     /// Every screen edge at `padding`.
@@ -210,10 +195,9 @@ impl Spacing {
     /// A lone tile's frame in `usable`: centered at `single_window_max_width` when narrower.
     #[must_use]
     pub fn single(self, usable: Rect) -> Rect {
-        let max = self.single_window_max_width;
-        if max <= 0 || max >= usable.width {
+        let Some(max) = self.single_window_max_width.width_in(usable.width) else {
             return usable;
-        }
+        };
         Rect {
             x: usable.x + (usable.width - max) / 2,
             width: max,

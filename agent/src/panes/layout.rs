@@ -5,9 +5,8 @@
 mod preview;
 mod slider;
 
-use rune::{Color, El, Tx, col, icon, row, text};
-use rune_kit::SegmentedControl;
-use spaceman::spacing::{Spacing, SpacingKey};
+use rune::{Color, El, col, icon, row, text};
+use spaceman::spacing::{SingleWidth, Spacing, SpacingKey, WidthPercent};
 
 use crate::{
     Ui,
@@ -19,31 +18,57 @@ use slider::{Channel, slider};
 
 /// The sliders' reach; `config.toml` takes more (48 between windows, 128 at an edge).
 const SLIDER_MAX: i32 = 32;
-/// Single-window widths offered besides Off.
-const WIDTHS: [i32; 3] = [1440, 1680, 1920];
-
 /// Every gap at once: between windows and all four screen edges. It reads the gap between
 /// windows, so while the gaps differ a drag evens them out.
-const ALL: Channel = Channel {
-    get: |spacing| spacing.inner,
-    set: |spacing, gap| Spacing {
+const ALL: Channel = Channel::points(
+    |spacing| spacing.inner,
+    |spacing, gap| Spacing {
         inner: gap,
         ..spacing.with_edges(gap)
     },
-    max: SLIDER_MAX,
-};
+    SLIDER_MAX,
+);
 
-const INNER: Channel = Channel {
-    get: |spacing| spacing.inner,
-    set: |spacing, inner| Spacing { inner, ..spacing },
-    max: SLIDER_MAX,
-};
+const INNER: Channel = Channel::points(
+    |spacing| spacing.inner,
+    |spacing, inner| Spacing { inner, ..spacing },
+    SLIDER_MAX,
+);
 
 /// All four edges at once; while they differ, it shows the top edge and sets them all.
-const EDGES: Channel = Channel {
-    get: |spacing| spacing.uniform_edges().unwrap_or(spacing.top),
-    set: Spacing::with_edges,
-    max: SLIDER_MAX,
+const EDGES: Channel = Channel::points(
+    |spacing| spacing.uniform_edges().unwrap_or(spacing.top),
+    Spacing::with_edges,
+    SLIDER_MAX,
+);
+
+/// The single-window width as a share of the display, 40% to 100% in steps of 5, where 100% is
+/// off. A width in points that only `config.toml` sets reads as itself until the slider moves,
+/// its thumb at that width's share of the preview's ultrawide.
+const WIDTH: Channel = Channel {
+    get: |spacing| match spacing.single_window_max_width {
+        SingleWidth::Off => 100,
+        SingleWidth::Percent(percent) => percent.get(),
+        SingleWidth::Points(points) => {
+            let usable = spacing.usable(preview::ULTRAWIDE).width.max(1);
+            (points.get() * 100 / usable + 2) / 5 * 5
+        }
+    },
+    set: |spacing, percent| Spacing {
+        single_window_max_width: match WidthPercent::new(i64::from(percent)) {
+            Some(share) if percent < 100 => SingleWidth::Percent(share),
+            _ => SingleWidth::Off,
+        },
+        ..spacing
+    },
+    min: 40,
+    max: 100,
+    step: 5,
+    readout: |spacing, _| match spacing.single_window_max_width {
+        SingleWidth::Off => "Off".to_owned(),
+        SingleWidth::Points(points) => format!("{} px", points.get()),
+        width @ SingleWidth::Percent(_) => width.to_string(),
+    },
 };
 
 const EDGE_CHANNELS: [(SpacingKey, &str, Channel); 4] = [
@@ -55,26 +80,26 @@ const EDGE_CHANNELS: [(SpacingKey, &str, Channel); 4] = [
 
 const fn edge(key: SpacingKey) -> Channel {
     match key {
-        SpacingKey::Top => Channel {
-            get: |spacing| spacing.top,
-            set: |spacing, top| Spacing { top, ..spacing },
-            max: SLIDER_MAX,
-        },
-        SpacingKey::Bottom => Channel {
-            get: |spacing| spacing.bottom,
-            set: |spacing, bottom| Spacing { bottom, ..spacing },
-            max: SLIDER_MAX,
-        },
-        SpacingKey::Left => Channel {
-            get: |spacing| spacing.left,
-            set: |spacing, left| Spacing { left, ..spacing },
-            max: SLIDER_MAX,
-        },
-        _ => Channel {
-            get: |spacing| spacing.right,
-            set: |spacing, right| Spacing { right, ..spacing },
-            max: SLIDER_MAX,
-        },
+        SpacingKey::Top => Channel::points(
+            |spacing| spacing.top,
+            |spacing, top| Spacing { top, ..spacing },
+            SLIDER_MAX,
+        ),
+        SpacingKey::Bottom => Channel::points(
+            |spacing| spacing.bottom,
+            |spacing, bottom| Spacing { bottom, ..spacing },
+            SLIDER_MAX,
+        ),
+        SpacingKey::Left => Channel::points(
+            |spacing| spacing.left,
+            |spacing, left| Spacing { left, ..spacing },
+            SLIDER_MAX,
+        ),
+        _ => Channel::points(
+            |spacing| spacing.right,
+            |spacing, right| Spacing { right, ..spacing },
+            SLIDER_MAX,
+        ),
     }
 }
 
@@ -140,11 +165,12 @@ pub fn pane(ui: &Ui, p: Paint) -> El {
             "single-width",
             "Single-window width",
             Some((
-                "A window alone on its display, and Fullscreen Layout, is centered at this width."
+                "A window alone on its display, and Fullscreen Layout, is centered at this share \
+                 of the display's width."
                     .to_owned(),
                 p.muted(),
             )),
-            width_picker(p, spacing.single_window_max_width),
+            slider(p, "width-slider", "Single-window width", &spacing, WIDTH),
         ),
         p,
         target,
@@ -170,7 +196,7 @@ fn gap_rows(p: Paint, spacing: &Spacing, open: bool) -> Vec<El> {
             "inner",
             "Between windows",
             None,
-            slider(p, "inner-slider", "Between windows", spacing.inner, INNER),
+            slider(p, "inner-slider", "Between windows", spacing, INNER),
         )
     } else {
         controls::setting_row(
@@ -178,7 +204,7 @@ fn gap_rows(p: Paint, spacing: &Spacing, open: bool) -> Vec<El> {
             "all",
             "Window gaps",
             (!uniform(spacing)).then(|| ("Dragging evens out every gap.".to_owned(), p.muted())),
-            slider(p, "all-slider", "Window gaps", (ALL.get)(spacing), ALL),
+            slider(p, "all-slider", "Window gaps", spacing, ALL),
         )
     };
     let mut rows = vec![lead, disclosure(p, open)];
@@ -193,16 +219,10 @@ fn gap_rows(p: Paint, spacing: &Spacing, open: bool) -> Vec<El> {
             .uniform_edges()
             .is_none()
             .then(|| ("Each edge is set on its own.".to_owned(), p.muted())),
-        slider(
-            p,
-            "edges-slider",
-            "Screen edges",
-            (EDGES.get)(spacing),
-            EDGES,
-        ),
+        slider(p, "edges-slider", "Screen edges", spacing, EDGES),
     ));
     rows.extend(EDGE_CHANNELS.iter().map(|(key, title, channel)| {
-        let name = key.gap_name().unwrap_or("edge");
+        let name = key.gap_name();
         controls::setting_row(
             p,
             &format!("edge-{name}"),
@@ -212,7 +232,7 @@ fn gap_rows(p: Paint, spacing: &Spacing, open: bool) -> Vec<El> {
                 p,
                 &format!("{name}-slider"),
                 &format!("{title} edge"),
-                (channel.get)(spacing),
+                spacing,
                 *channel,
             ),
         )
@@ -250,53 +270,34 @@ fn disclosure(p: Paint, open: bool) -> El {
         )
 }
 
-/// Off, the common widths, and a width only `config.toml` set when it holds one.
-fn width_options(current: i32) -> (Vec<(String, i32)>, usize) {
-    let mut options = vec![("Off".to_owned(), 0)];
-    options.extend(WIDTHS.map(|width| (width.to_string(), width)));
-    if !options.iter().any(|(_, width)| *width == current) {
-        options.push((format!("{current} px"), current));
-    }
-    let selected = options
-        .iter()
-        .position(|(_, width)| *width == current)
-        .unwrap_or(0);
-    (options, selected)
-}
-
-fn width_picker(p: Paint, current: i32) -> El {
-    let (options, selected) = width_options(current);
-    let labels: Vec<String> = options.iter().map(|(label, _)| label.clone()).collect();
-    let widths: Vec<i32> = options.iter().map(|(_, width)| *width).collect();
-    SegmentedControl::new(&labels, Some(selected))
-        .fit()
-        .on_pick(move |ui: &mut Ui, index, _: &mut Tx| {
-            if let Some(width) = widths.get(index) {
-                let base = ui.doc.spacing();
-                ui.set_spacing(Spacing {
-                    single_window_max_width: *width,
-                    ..base
-                });
-            }
-        })
-        .build(p.k)
-        .key("width-picker")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn width(raw: &str) -> Spacing {
+        Spacing {
+            single_window_max_width: SingleWidth::parse(raw).unwrap(),
+            ..Spacing::NONE
+        }
+    }
+
     #[test]
-    fn width_picker_offers_off_the_presets_and_a_custom_width() {
-        let (options, selected) = width_options(0);
-        assert_eq!(options.len(), 4);
-        assert_eq!(selected, 0);
-        let (_, selected) = width_options(1680);
-        assert_eq!(selected, 2);
-        let (options, selected) = width_options(1600);
-        assert_eq!(options.len(), 5);
-        assert_eq!(options[selected], ("1600 px".to_owned(), 1600));
+    fn the_width_slider_sets_a_share_and_100_turns_it_off() {
+        let moved = (WIDTH.set)(width("1920"), 80);
+        assert_eq!(moved.single_window_max_width.to_string(), "80%");
+        assert_eq!((WIDTH.readout)(&moved, 80), "80%");
+        let off = (WIDTH.set)(width("80%"), 100);
+        assert_eq!(off.single_window_max_width, SingleWidth::Off);
+        assert_eq!((WIDTH.readout)(&off, 100), "Off");
+        assert_eq!((WIDTH.get)(&off), 100);
+    }
+
+    #[test]
+    fn the_width_slider_shows_a_points_width_as_written() {
+        let points = width("1920");
+        assert_eq!((WIDTH.readout)(&points, (WIDTH.get)(&points)), "1920 px");
+        assert_eq!((WIDTH.get)(&points), 55);
+        assert_eq!((WIDTH.get)(&width("33%")), 33);
     }
 
     #[test]
@@ -327,11 +328,11 @@ mod tests {
         assert_eq!((ALL.get)(&locked), 12);
         assert_eq!(locked.uniform_edges(), Some(12));
         assert!(uniform(&Spacing::NONE));
-        let wide = Spacing {
-            single_window_max_width: 1680,
-            ..Spacing::NONE
-        };
-        assert_eq!((ALL.set)(wide, 8).single_window_max_width, 1680);
+        let wide = width("1680");
+        assert_eq!(
+            (ALL.set)(wide, 8).single_window_max_width.to_string(),
+            "1680"
+        );
     }
 
     #[test]

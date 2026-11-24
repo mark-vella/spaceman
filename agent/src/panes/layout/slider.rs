@@ -1,5 +1,5 @@
-//! A points slider for one spacing value. Dragging only redraws the preview; letting go saves
-//! `config.toml` once, and the arrow keys step and save a point at a time.
+//! A slider for one spacing value. Dragging only redraws the preview; letting go saves
+//! `config.toml` once, and the arrow keys step and save one step at a time.
 
 use rune::{Align, Drag, El, Phase, Tx, el, row, text};
 use spaceman::spacing::Spacing;
@@ -12,12 +12,34 @@ const TRACK: f32 = 4.0;
 const THUMB: f32 = 16.0;
 const READOUT_WIDTH: f32 = 44.0;
 
-/// How a slider reads its value from, and writes it into, the spacing.
+/// How a slider reads its value from, and writes it into, the spacing, between `min` and `max`
+/// in steps of `step`, and what its readout says.
 #[derive(Clone, Copy)]
 pub(super) struct Channel {
     pub get: fn(&Spacing) -> i32,
     pub set: fn(Spacing, i32) -> Spacing,
+    pub min: i32,
     pub max: i32,
+    pub step: i32,
+    pub readout: fn(&Spacing, i32) -> String,
+}
+
+impl Channel {
+    /// A gap in points, from 0 to `max` a point at a time.
+    pub const fn points(
+        get: fn(&Spacing) -> i32,
+        set: fn(Spacing, i32) -> Spacing,
+        max: i32,
+    ) -> Self {
+        Self {
+            get,
+            set,
+            min: 0,
+            max,
+            step: 1,
+            readout: |_, value| format!("{value} px"),
+        }
+    }
 }
 
 /// The spacing on screen: a drag in progress, else what the file holds.
@@ -26,15 +48,18 @@ fn current(ui: &Ui) -> Spacing {
 }
 
 /// The value at `x` points along a slider `width` wide.
-pub(super) fn value_at(x: f32, width: f32, max: i32) -> i32 {
+pub(super) fn value_at(x: f32, width: f32, channel: Channel) -> i32 {
     let travel = (width - THUMB).max(1.0);
     let fraction = ((x - THUMB / 2.0) / travel).clamp(0.0, 1.0);
-    (fraction * max as f32).round() as i32
+    let steps = ((channel.max - channel.min) / channel.step.max(1)) as f32;
+    channel.min + (fraction * steps).round() as i32 * channel.step
 }
 
-pub(super) fn slider(p: Paint, key: &str, label: &str, value: i32, channel: Channel) -> El {
+pub(super) fn slider(p: Paint, key: &str, label: &str, spacing: &Spacing, channel: Channel) -> El {
     let c = &p.k.c;
-    let fraction = (value as f32 / channel.max.max(1) as f32).clamp(0.0, 1.0);
+    let value = (channel.get)(spacing);
+    let fraction =
+        ((value - channel.min) as f32 / (channel.max - channel.min).max(1) as f32).clamp(0.0, 1.0);
     let thumb_x = fraction * (WIDTH - THUMB);
     let track = el()
         .key("track")
@@ -65,7 +90,7 @@ pub(super) fn slider(p: Paint, key: &str, label: &str, value: i32, channel: Chan
         .size(WIDTH, HEIGHT)
         .on_drag(move |ui: &mut Ui, drag: &mut Drag, tx: &mut Tx| {
             let base = current(ui);
-            let at = value_at(drag.start_x + drag.dx, drag.w, channel.max);
+            let at = value_at(drag.start_x + drag.dx, drag.w, channel);
             match drag.phase {
                 Phase::Down => ui.spacing_draft = Some((channel.set)(base, at)),
                 Phase::Move => {
@@ -78,7 +103,8 @@ pub(super) fn slider(p: Paint, key: &str, label: &str, value: i32, channel: Chan
         })
         .on_step(move |ui: &mut Ui, delta, _: &mut Tx| {
             let base = ui.doc.spacing();
-            let value = ((channel.get)(&base) + delta).clamp(0, channel.max);
+            let value =
+                ((channel.get)(&base) + delta * channel.step).clamp(channel.min, channel.max);
             ui.set_spacing((channel.set)(base, value));
         })
         .focus_ring(2.0, 2.0, c.border_focus)
@@ -91,7 +117,7 @@ pub(super) fn slider(p: Paint, key: &str, label: &str, value: i32, channel: Chan
         .center_y()
         .child(bar)
         .child(
-            text(format!("{value} px"))
+            text((channel.readout)(spacing, value))
                 .key("readout")
                 .font(p.k.ty.small)
                 .color(p.muted())
@@ -106,10 +132,26 @@ mod tests {
 
     #[test]
     fn the_thumb_centre_maps_to_the_value() {
-        assert_eq!(value_at(0.0, WIDTH, 32), 0);
-        assert_eq!(value_at(THUMB / 2.0, WIDTH, 32), 0);
-        assert_eq!(value_at(WIDTH / 2.0, WIDTH, 32), 16);
-        assert_eq!(value_at(WIDTH - THUMB / 2.0, WIDTH, 32), 32);
-        assert_eq!(value_at(WIDTH + 40.0, WIDTH, 32), 32);
+        let gap = Channel::points(|spacing| spacing.inner, |spacing, _| spacing, 32);
+        assert_eq!(value_at(0.0, WIDTH, gap), 0);
+        assert_eq!(value_at(THUMB / 2.0, WIDTH, gap), 0);
+        assert_eq!(value_at(WIDTH / 2.0, WIDTH, gap), 16);
+        assert_eq!(value_at(WIDTH - THUMB / 2.0, WIDTH, gap), 32);
+        assert_eq!(value_at(WIDTH + 40.0, WIDTH, gap), 32);
+    }
+
+    #[test]
+    fn a_stepped_range_snaps_to_its_steps() {
+        let share = Channel {
+            min: 40,
+            max: 100,
+            step: 5,
+            ..Channel::points(|spacing| spacing.inner, |spacing, _| spacing, 0)
+        };
+        assert_eq!(value_at(0.0, WIDTH, share), 40);
+        assert_eq!(value_at(WIDTH / 2.0, WIDTH, share), 70);
+        assert_eq!(value_at(WIDTH / 2.0 + 4.0, WIDTH, share), 70);
+        assert_eq!(value_at(WIDTH / 2.0 + 13.0, WIDTH, share), 75);
+        assert_eq!(value_at(WIDTH, WIDTH, share), 100);
     }
 }

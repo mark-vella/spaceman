@@ -42,7 +42,8 @@ Spacing                                                 // tile.spacing
 ├── settings.gaps.inner              -> exactly that many points between neighboring tiles, any nesting
 ├── settings.gaps.top/bottom/left/right -> outer padding; gives way above a 320×240 tiled area
 └── settings.single_window_max_width -> a lone tile (one tiled window, or Fullscreen Layout) centered
-    at that width when the padded area is wider
+    at that width when the padded area is wider: points (1680) or a share of the padded width
+    ("80%", never under 320 points; "100%" is off)
 ```
 
 ## How To Get To It (User POV)
@@ -52,7 +53,8 @@ Keyboard: Option+H/J/K/L, Option+Shift+H/J/K/L, Option+`, Option+-, Option+=, Op
 Pointer:  drag a managed window (reorder/nest/move display), drag its edge (resize)
 CLI:      spaceman ctl focus | move-direction | resize | balance | layout | retile
 Settings: Settings › Layout -> Window gaps (Customize separately: Between windows, Screen edges, Top/Bottom/Left/Right), Single-window width
-Config:   spaceman config set gaps.inner|gaps.top|gaps.bottom|gaps.left|gaps.right|single_window_max_width <points>
+Config:   spaceman config set gaps.inner|gaps.top|gaps.bottom|gaps.left|gaps.right <points>
+          spaceman config set single_window_max_width <points>|<percent>%
 ```
 
 Input arriving while the worker is busy queues in order (up to 64); queued input is dropped on
@@ -87,10 +89,12 @@ pause, quit, or hotkey loss.
   `fitting_minimums_reaches_into_nested_splits_and_leaves_impossible_splits_alone`.
 - Spacing, `src/spacing/tests.rs`: outer padding and its 320×240 floor; one tile, two columns and a
   nested three-tile split with inner gaps and asymmetric padding (no overlaps, exact point totals);
-  equal weights give equal windows; Fullscreen Layout's capped frame; directional focus across gaps;
-  a pointer resize, keyboard resize and balance through gaps. `src/config.rs` and
-  `src/cli/tests.rs` cover parsing, range errors and `spaceman config`;
-  `agent/src/rules/tests.rs` covers Settings › Layout saves that keep comments and restore the file.
+  equal weights give equal windows; Fullscreen Layout's capped frame; a percentage width as literal
+  frames on 3350- and 1422-point usable widths, its 320-point floor, and `"100%"` filling;
+  directional focus across gaps; a pointer resize, keyboard resize and balance through gaps.
+  `src/config.rs`, `src/cli/tests.rs` and `src/cli/tests/regressions.rs` cover parsing, range errors
+  and `spaceman config` (points and percentages, text and JSON); `agent/src/rules/tests.rs` covers
+  Settings › Layout saves that keep comments, keep the width's written form, and restore the file.
 - Fixture replay: `cargo run -- replay fixtures/ghostty-tab-replacement.json` (reconciliation of a
   native-tab replacement, without the runtime).
 - Live harness (not run): `scripts/live-ghostty-tabs.sh` for native-tab slot preservation.

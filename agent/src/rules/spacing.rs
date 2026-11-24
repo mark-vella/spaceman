@@ -1,7 +1,7 @@
 //! `[settings.gaps]` and `settings.single_window_max_width`, edited in place like the rest of
 //! the file. A value at its default `0` leaves the file, and so does a table it empties.
 
-use spaceman::spacing::{Spacing, SpacingKey};
+use spaceman::spacing::{SingleWidth, Spacing, SpacingKey};
 use toml_edit::{Item, Table};
 
 use super::Doc;
@@ -15,16 +15,21 @@ impl Doc {
             .and_then(Item::as_table_like);
         let mut spacing = Spacing::NONE;
         for key in SpacingKey::ALL {
-            let item = match key.gap_name() {
-                Some(name) => gaps.and_then(|table| table.get(name)),
-                None => settings.and_then(|table| table.get(key.path())),
-            };
-            let checked = item
+            let checked = gaps
+                .and_then(|table| table.get(key.gap_name()))
                 .and_then(Item::as_integer)
                 .and_then(|raw| key.check(raw).ok())
                 .unwrap_or(0);
             key.set(&mut spacing, checked);
         }
+        spacing.single_window_max_width = settings
+            .and_then(|table| table.get(SingleWidth::KEY))
+            .and_then(|item| match item.as_value()? {
+                toml_edit::Value::Integer(points) => SingleWidth::from_points(*points.value()).ok(),
+                toml_edit::Value::String(text) => SingleWidth::from_text(text.value()).ok(),
+                _ => None,
+            })
+            .unwrap_or_default();
         spacing
     }
 
@@ -37,22 +42,33 @@ impl Doc {
                 continue;
             }
             let item = (value != 0).then(|| toml_edit::value(i64::from(value)));
-            match key.gap_name() {
-                Some(name) => self.set_gap(name, item),
-                None => self.set_setting(key.path(), item),
-            }
+            self.set_gap(key.gap_name(), item);
+        }
+        let width = spacing.single_window_max_width;
+        if current.single_window_max_width != width || self.has_single_width() == width.is_off() {
+            let item = match width {
+                SingleWidth::Off => None,
+                SingleWidth::Points(points) => Some(toml_edit::value(i64::from(points.get()))),
+                SingleWidth::Percent(_) => Some(toml_edit::value(width.to_string())),
+            };
+            self.set_setting(SingleWidth::KEY, item);
         }
     }
 
     fn has_spacing_key(&self, key: SpacingKey) -> bool {
-        let settings = self.doc.get("settings").and_then(Item::as_table_like);
-        match key.gap_name() {
-            Some(name) => settings
-                .and_then(|table| table.get("gaps"))
-                .and_then(Item::as_table_like)
-                .is_some_and(|gaps| gaps.contains_key(name)),
-            None => settings.is_some_and(|table| table.contains_key(key.path())),
-        }
+        self.doc
+            .get("settings")
+            .and_then(Item::as_table_like)
+            .and_then(|table| table.get("gaps"))
+            .and_then(Item::as_table_like)
+            .is_some_and(|gaps| gaps.contains_key(key.gap_name()))
+    }
+
+    fn has_single_width(&self) -> bool {
+        self.doc
+            .get("settings")
+            .and_then(Item::as_table_like)
+            .is_some_and(|table| table.contains_key(SingleWidth::KEY))
     }
 
     /// Sets `name` in `[settings.gaps]`, or removes it (and the tables it empties) for `None`.

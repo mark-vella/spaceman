@@ -36,7 +36,7 @@ hud = true                            # optional (default: true); non-activating
 hud_style = "icons"                   # optional (default: "icons"); or "layouts"
 update_channel = "stable"             # optional (default: "stable"); or "dev", a build of every merge
 mouse_follows_focus = "off"           # optional (default: "off"); or "display", "window"
-single_window_max_width = 0           # optional (default: 0, off); or 320 through 16384 points
+single_window_max_width = 0           # optional (default: 0, off); 320 through 16384 points, or "1%" through "100%"
 
 [settings.gaps]                       # optional; every key defaults to 0
 inner = 0                             # points between tiled windows, 0 through 48
@@ -100,20 +100,34 @@ tiled window of a workspace or any window in Fullscreen Layout. The window is ce
 inside the padded area; on a display that is narrower, it fills the area as before. It suits wide and
 ultrawide displays, where one full-width window is hard to read.
 
-Out-of-range values are rejected with a message naming the key and its range, like any other invalid
-configuration. Every key defaults to `0`, so a file without them tiles exactly as before.
+The width is either a whole number of points (`1680`) or a quoted whole percentage of the padded
+area's width on the window's own display (`"80%"`), so one value suits displays of different
+sizes. A percentage never makes the window narrower than 320 points unless the padded area itself is
+narrower, and `"100%"` fills the area like `0`. On a 3440-point display with 45 points of padding on
+the left and right, `"80%"` gives a window 2680 points wide.
+
+Out-of-range values are rejected with a message naming the key and its accepted forms, like any
+other invalid configuration. Every key defaults to `0`, so a file without them tiles exactly as
+before.
 
 Settings › Layout edits the same keys over a live miniature of the result. One **Window gaps**
 slider sets `inner` and all four edges together; **Customize separately** (open on its own when the
-file's gaps differ) sets between windows, all screen edges, and each edge on its own.
+file's gaps differ) sets between windows, all screen edges, and each edge on its own. The
+**Single-window width** slider sets a percentage from 40% to 100% in steps of 5, where 100% is off;
+a width in points from the file shows as written (for example `1920 px`) until the slider moves,
+which saves a percentage. Saving keeps the form the file holds and its comments.
 `spaceman config` reads and writes them by dotted key:
 
 ```sh
 spaceman config set gaps.inner 8
 spaceman config set gaps.top 32
 spaceman config set single_window_max_width 1680
+spaceman config set single_window_max_width 80%
 spaceman config get gaps.inner
 ```
+
+`config get single_window_max_width` prints `80%` for a percentage. With `--json`, `config get` and
+`config show` give a percentage as the string `"80%"` and points as a number.
 
 ## Shortcuts
 

@@ -11,7 +11,7 @@ use spaceman::{
         Config, HudStyle, MouseFollowsFocus, UpdateChannel, config_path, lock_config,
         write_config_atomic,
     },
-    spacing::{Spacing, SpacingKey},
+    spacing::{SingleWidth, Spacing, SpacingKey},
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -87,7 +87,7 @@ pub(crate) struct SettingsDoc {
     )]
     pub mouse_follows_focus: Option<MouseFollowsFocus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub single_window_max_width: Option<i64>,
+    pub single_window_max_width: Option<SingleWidth>,
     #[serde(default, skip_serializing_if = "GapsDoc::is_empty")]
     pub gaps: GapsDoc,
 }
@@ -135,7 +135,6 @@ impl SettingsDoc {
             SpacingKey::Bottom => &mut self.gaps.bottom,
             SpacingKey::Left => &mut self.gaps.left,
             SpacingKey::Right => &mut self.gaps.right,
-            SpacingKey::SingleWindowMaxWidth => &mut self.single_window_max_width,
         }
     }
 
@@ -147,10 +146,16 @@ impl SettingsDoc {
             let value = doc.spacing_slot(key).unwrap_or(0);
             key.set(&mut spacing, i32::try_from(value).unwrap_or(0));
         }
+        spacing.single_window_max_width = self.single_window_max_width.unwrap_or_default();
         spacing
     }
 
-    /// Sets one spacing key after checking its range; `0` removes it, back to the default.
+    /// Sets the single-window width; off removes it, back to the default.
+    pub(crate) fn set_single_width(&mut self, width: SingleWidth) {
+        self.single_window_max_width = (!width.is_off()).then_some(width);
+    }
+
+    /// Sets one gap after checking its range; `0` removes it, back to the default.
     pub(crate) fn set_spacing(&mut self, key: SpacingKey, value: i64) -> Result<i32, String> {
         let checked = key.check(value)?;
         *self.spacing_slot(key) = (checked != 0).then_some(i64::from(checked));
@@ -229,7 +234,7 @@ pub(crate) struct EffectiveSettings {
     pub hud_style: &'static str,
     pub update_channel: &'static str,
     pub mouse_follows_focus: &'static str,
-    pub single_window_max_width: i32,
+    pub single_window_max_width: SingleWidth,
     pub gaps: EffectiveGaps,
 }
 

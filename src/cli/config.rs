@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use spaceman::{
     config::{HudStyle, MouseFollowsFocus, UpdateChannel, load_path},
-    spacing::SpacingKey,
+    spacing::{SingleWidth, SpacingKey},
 };
 
 use super::{
@@ -56,6 +56,7 @@ enum SettingKey {
     HudStyle,
     UpdateChannel,
     MouseFollowsFocus,
+    SingleWidth,
     Spacing(SpacingKey),
 }
 
@@ -66,6 +67,7 @@ impl SettingKey {
             "hud_style" => Ok(Self::HudStyle),
             "update_channel" => Ok(Self::UpdateChannel),
             "mouse_follows_focus" => Ok(Self::MouseFollowsFocus),
+            SingleWidth::KEY => Ok(Self::SingleWidth),
             other => SpacingKey::parse(other).map(Self::Spacing).ok_or_else(|| {
                 format!(
                     "unknown setting {raw:?}; valid keys: hud, hud_style, update_channel, \
@@ -82,6 +84,7 @@ impl SettingKey {
             Self::HudStyle => "hud_style",
             Self::UpdateChannel => "update_channel",
             Self::MouseFollowsFocus => "mouse_follows_focus",
+            Self::SingleWidth => SingleWidth::KEY,
             Self::Spacing(key) => key.path(),
         }
     }
@@ -209,6 +212,10 @@ fn run_get(args: &[&str], path_override: Option<&Path>) -> Result<String, String
             let mode = doc.settings.effective_mouse_follows_focus().as_str();
             (mode.to_owned(), serde_json::Value::String(mode.to_owned()))
         }
+        SettingKey::SingleWidth => {
+            let width = doc.settings.effective_spacing().single_window_max_width;
+            (width.to_string(), width_json(width)?)
+        }
         SettingKey::Spacing(key) => {
             let value = key.get(&doc.settings.effective_spacing());
             (value.to_string(), serde_json::Value::from(value))
@@ -225,11 +232,17 @@ fn run_get(args: &[&str], path_override: Option<&Path>) -> Result<String, String
     }
 }
 
+/// Points as a JSON number, a percentage as a string such as `"80%"`.
+fn width_json(width: SingleWidth) -> Result<serde_json::Value, String> {
+    serde_json::to_value(width).map_err(|error| format!("failed to encode JSON output: {error}"))
+}
+
 enum SettingValue {
     Hud(bool),
     HudStyle(HudStyle),
     UpdateChannel(UpdateChannel),
     MouseFollowsFocus(MouseFollowsFocus),
+    SingleWidth(SingleWidth),
     Spacing(SpacingKey, i64),
 }
 
@@ -264,6 +277,7 @@ impl SettingValue {
                         "invalid value for mouse_follows_focus: expected 'off', 'display', or 'window', got {raw_value:?}"
                     )
                 }),
+            SettingKey::SingleWidth => SingleWidth::parse(raw_value).map(Self::SingleWidth),
             SettingKey::Spacing(spacing_key) => {
                 let parsed = raw_value.parse::<i64>().map_err(|_| {
                     format!(
@@ -315,6 +329,13 @@ fn run_set(args: &[&str], path_override: Option<&Path>) -> Result<String, String
                 (
                     format!("set mouse_follows_focus = {}", parsed.as_str()),
                     serde_json::Value::String(parsed.as_str().to_owned()),
+                )
+            }
+            SettingValue::SingleWidth(width) => {
+                doc.settings.set_single_width(width);
+                (
+                    format!("set {} = {width}", SingleWidth::KEY),
+                    width_json(width)?,
                 )
             }
             SettingValue::Spacing(spacing_key, parsed) => {

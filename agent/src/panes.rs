@@ -130,6 +130,18 @@ impl Pane {
     }
 }
 
+fn layout_width(ui: &mut Ui, width: &str) {
+    reset_fixture(ui, Pane::Layout);
+    let width = spaceman::spacing::SingleWidth::parse(width).unwrap_or_default();
+    ui.edit(|doc| {
+        doc.set_spacing(spaceman::spacing::Spacing {
+            inner: 10,
+            single_window_max_width: width,
+            ..spaceman::spacing::Spacing::NONE.with_edges(10)
+        });
+    });
+}
+
 pub(crate) const SCENES: &[Scene] = &[
     ("general", |ui| reset_fixture(ui, Pane::General)),
     ("general-setup", |ui| {
@@ -159,10 +171,14 @@ pub(crate) const SCENES: &[Scene] = &[
                 bottom: 8,
                 left: 8,
                 right: 8,
-                single_window_max_width: 1680,
+                single_window_max_width: spaceman::spacing::SingleWidth::parse("1680")
+                    .unwrap_or_default(),
             });
         });
     }),
+    // The single-window width as a share of the display, and as points only the file sets.
+    ("layout-percent", |ui| layout_width(ui, "80%")),
+    ("layout-points", |ui| layout_width(ui, "1920")),
     ("workspaces", |ui| reset_fixture(ui, Pane::Workspaces)),
     // A third monitor: workspace 9 assigned to it, its segment in every row's picker.
     ("workspaces-three-displays", |ui| {

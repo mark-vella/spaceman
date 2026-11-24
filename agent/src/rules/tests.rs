@@ -216,7 +216,7 @@ fn spacing_round_trips_and_leaves_the_file_as_it_was() {
     assert_eq!(doc.spacing(), Spacing::NONE);
     let spacing = Spacing {
         inner: 8,
-        single_window_max_width: 1680,
+        single_window_max_width: spaceman::spacing::SingleWidth::parse("1680").unwrap(),
         ..Spacing::NONE.with_edges(12)
     };
     doc.set_spacing(spacing);
@@ -234,6 +234,43 @@ fn spacing_round_trips_and_leaves_the_file_as_it_was() {
 
     doc.set_spacing(Spacing::NONE);
     assert_eq!(doc.source(), SOURCE);
+}
+
+#[test]
+fn the_single_window_width_keeps_the_form_the_file_wrote() {
+    use spaceman::spacing::{SingleWidth, Spacing};
+    for (line, shown) in [
+        ("single_window_max_width = \"80%\"", "80%"),
+        ("single_window_max_width = 1680", "1680"),
+    ] {
+        let source = format!("version = 1\n[settings]\n# Wide.\n{line} # mine\n");
+        let mut doc = Doc::parse(&source);
+        let spacing = doc.spacing();
+        assert_eq!(spacing.single_window_max_width.to_string(), shown);
+        doc.set_spacing(Spacing {
+            inner: 6,
+            ..spacing
+        });
+        let saved = doc.source();
+        assert!(
+            saved.contains(&format!("# Wide.\n{line} # mine\n")),
+            "{saved}"
+        );
+        doc.set_spacing(spacing);
+        assert_eq!(doc.source(), source);
+    }
+
+    let mut doc = Doc::parse("version = 1\n[settings]\n# Wide.\nsingle_window_max_width = 1920\n");
+    doc.set_spacing(Spacing {
+        single_window_max_width: SingleWidth::parse("75%").unwrap(),
+        ..doc.spacing()
+    });
+    assert_eq!(
+        doc.source(),
+        "version = 1\n[settings]\n# Wide.\nsingle_window_max_width = \"75%\"\n"
+    );
+    doc.set_spacing(Spacing::NONE);
+    assert_eq!(doc.source(), "version = 1\n");
 }
 
 #[test]

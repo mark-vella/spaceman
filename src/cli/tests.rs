@@ -305,7 +305,7 @@ fn config_gets_sets_and_shows_spacing() {
         (spacing.inner, spacing.top, spacing.right, spacing.bottom),
         (8, 32, 12, 0)
     );
-    assert_eq!(spacing.single_window_max_width, 1600);
+    assert_eq!(spacing.single_window_max_width.to_string(), "1600");
     assert!(!Config::parse(&temp.read()).unwrap().hud());
     assert_eq!(
         temp.run(&["config", "get", "gaps.top"]).stdout.as_deref(),

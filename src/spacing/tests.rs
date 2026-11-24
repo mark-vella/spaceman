@@ -18,8 +18,12 @@ fn spacing(inner: i32, [top, bottom, left, right]: [i32; 4]) -> Spacing {
         bottom,
         left,
         right,
-        single_window_max_width: 0,
+        single_window_max_width: SingleWidth::Off,
     }
+}
+
+fn width(raw: &str) -> SingleWidth {
+    SingleWidth::parse(raw).unwrap()
 }
 
 fn frames(spacing: Spacing, layout: &LayoutTree) -> Vec<(SlotId, Rect)> {
@@ -109,7 +113,7 @@ fn one_tile_fills_the_usable_rect_or_centers_at_the_max_width() {
     );
 
     let capped = Spacing {
-        single_window_max_width: 600,
+        single_window_max_width: width("600"),
         ..spacing(12, [0, 0, 100, 0])
     };
     let usable = capped.usable(OUTPUT);
@@ -122,10 +126,89 @@ fn one_tile_fills_the_usable_rect_or_centers_at_the_max_width() {
 
     // Wider than the usable rect: no cap.
     let wide = Spacing {
-        single_window_max_width: 4000,
+        single_window_max_width: width("4000"),
         ..Spacing::NONE
     };
     assert_eq!(frames(wide, &layout)[0].1, OUTPUT);
+}
+
+/// A lone tile on `output` with `edge` padding on the left and right.
+fn lone(raw: &str, output_width: i32, edge: i32) -> Rect {
+    let spacing = Spacing {
+        single_window_max_width: width(raw),
+        ..spacing(8, [0, 0, edge, edge])
+    };
+    let output = Rect {
+        width: output_width,
+        ..OUTPUT
+    };
+    let layout = LayoutTree::flat(Axis::Horizontal, [SlotId(1)]);
+    let usable = spacing.usable(output);
+    spacing.place(usable, layout.placements(spacing.canvas(usable)))[0].1
+}
+
+#[test]
+fn a_percentage_centers_that_share_of_the_usable_width() {
+    // 3440 less 45 on each side leaves 3350; 80% is 2680.
+    assert_eq!(
+        lone("80%", 3440, 45),
+        Rect {
+            x: 380,
+            y: 25,
+            width: 2680,
+            height: 800,
+        }
+    );
+    // 1440 less 9 on each side leaves 1422; 80% is 1137.6, so 1137.
+    assert_eq!(
+        lone("80%", 1440, 9),
+        Rect {
+            x: 151,
+            y: 25,
+            width: 1137,
+            height: 800,
+        }
+    );
+}
+
+#[test]
+fn a_percentage_keeps_the_minimum_width_and_100_fills() {
+    // 40% of 600 is 240, under the 320 minimum.
+    assert_eq!(
+        lone("40%", 600, 0),
+        Rect {
+            x: 140,
+            y: 25,
+            width: 320,
+            height: 800,
+        }
+    );
+    // A usable rect under the minimum keeps its whole width.
+    assert_eq!(lone("40%", 300, 0).width, 300);
+    assert_eq!(
+        lone("100%", 1440, 20),
+        Rect {
+            x: 20,
+            y: 25,
+            width: 1400,
+            height: 800,
+        }
+    );
+}
+
+#[test]
+fn single_width_parses_points_and_percentages_and_prints_them_back() {
+    assert_eq!(width("0"), SingleWidth::Off);
+    assert_eq!(width("1680").to_string(), "1680");
+    assert_eq!(width("80%").to_string(), "80%");
+    for bad in [
+        "319", "16385", "-5", "0%", "101%", "80.5%", "%", " 80%", "80 %", "eighty",
+    ] {
+        assert!(SingleWidth::parse(bad).is_err(), "{bad}");
+    }
+    assert_eq!(serde_json::to_string(&width("80%")).unwrap(), "\"80%\"");
+    assert_eq!(serde_json::to_string(&width("1680")).unwrap(), "1680");
+    assert_eq!(serde_json::to_string(&SingleWidth::Off).unwrap(), "0");
 }
 
 #[test]
@@ -133,7 +216,7 @@ fn two_columns_split_the_usable_width_less_one_gap() {
     let layout = LayoutTree::flat(Axis::Horizontal, [SlotId(1), SlotId(2)]);
     for inner in [0, 1, 7, 10, 48] {
         let gapped = Spacing {
-            single_window_max_width: 400,
+            single_window_max_width: width("400"),
             ..spacing(inner, [30, 10, 20, 40])
         };
         let tiles = frames(gapped, &layout);
@@ -195,7 +278,7 @@ fn equal_weights_give_equal_windows_with_gaps() {
 #[test]
 fn fullscreen_layout_uses_the_padded_and_capped_single_frame() {
     let settings = Settings::for_output(OUTPUT).spaced(Spacing {
-        single_window_max_width: 720,
+        single_window_max_width: width("720"),
         ..spacing(16, [10, 10, 10, 10])
     });
     let usable = settings.usable();
@@ -314,9 +397,6 @@ fn keys_parse_check_and_round_trip() {
     assert_eq!(SpacingKey::Inner.check(48), Ok(48));
     assert!(SpacingKey::Inner.check(49).is_err());
     assert_eq!(SpacingKey::Top.check(128), Ok(128));
-    assert_eq!(SpacingKey::SingleWindowMaxWidth.check(0), Ok(0));
-    assert_eq!(SpacingKey::SingleWindowMaxWidth.check(320), Ok(320));
-    assert!(SpacingKey::SingleWindowMaxWidth.check(319).is_err());
     assert_eq!(spacing(0, [4, 4, 4, 4]).uniform_edges(), Some(4));
     assert_eq!(spacing(0, [4, 4, 4, 5]).uniform_edges(), None);
     assert_eq!(Spacing::NONE.with_edges(9).uniform_edges(), Some(9));

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     DisplaySelector, ObservedWindow, WorkspaceId, Workspaces,
     shortcuts::{RawShortcuts, Shortcuts},
-    spacing::{Spacing, SpacingKey},
+    spacing::{SingleWidth, Spacing, SpacingKey},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -193,7 +193,7 @@ struct RawSettings {
     #[serde(default)]
     mouse_follows_focus: MouseFollowsFocus,
     #[serde(default)]
-    single_window_max_width: i64,
+    single_window_max_width: Option<toml::Value>,
     #[serde(default)]
     gaps: RawGaps,
 }
@@ -205,7 +205,7 @@ impl Default for RawSettings {
             hud_style: HudStyle::default(),
             update_channel: UpdateChannel::default(),
             mouse_follows_focus: MouseFollowsFocus::default(),
-            single_window_max_width: 0,
+            single_window_max_width: None,
             gaps: RawGaps::default(),
         }
     }
@@ -237,12 +237,11 @@ impl RawSettings {
             (SpacingKey::Bottom, gaps.bottom),
             (SpacingKey::Left, gaps.left),
             (SpacingKey::Right, gaps.right),
-            (
-                SpacingKey::SingleWindowMaxWidth,
-                self.single_window_max_width,
-            ),
         ] {
             key.set(&mut spacing, key.check(value)?);
+        }
+        if let Some(width) = &self.single_window_max_width {
+            spacing.single_window_max_width = SingleWidth::from_toml(width)?;
         }
         Ok(spacing)
     }
@@ -586,7 +585,7 @@ struct EditableSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mouse_follows_focus: Option<MouseFollowsFocus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    single_window_max_width: Option<i64>,
+    single_window_max_width: Option<toml::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     gaps: Option<toml::Table>,
 }
@@ -1094,7 +1093,7 @@ right = 128
                 bottom: 4,
                 left: 0,
                 right: 128,
-                single_window_max_width: 1600,
+                single_window_max_width: SingleWidth::from_points(1600).unwrap(),
             }
         );
         let partial = Config::parse("version = 1\n[settings.gaps]\ninner = 12\n").unwrap();
@@ -1123,11 +1122,31 @@ right = 128
             ),
             (
                 "[settings]\nsingle_window_max_width = 100",
-                "settings.single_window_max_width must be 0 (off) or between 320 and 16384 px, got 100",
+                "settings.single_window_max_width must be 0 (off), between 320 and 16384 px, or a percentage from \"1%\" to \"100%\", got 100",
             ),
             (
                 "[settings]\nsingle_window_max_width = 99999",
-                "settings.single_window_max_width must be 0 (off) or between 320 and 16384 px, got 99999",
+                "settings.single_window_max_width must be 0 (off), between 320 and 16384 px, or a percentage from \"1%\" to \"100%\", got 99999",
+            ),
+            (
+                "[settings]\nsingle_window_max_width = \"0%\"",
+                "settings.single_window_max_width must be 0 (off), between 320 and 16384 px, or a percentage from \"1%\" to \"100%\", got \"0%\"",
+            ),
+            (
+                "[settings]\nsingle_window_max_width = \"101%\"",
+                "settings.single_window_max_width must be 0 (off), between 320 and 16384 px, or a percentage from \"1%\" to \"100%\", got \"101%\"",
+            ),
+            (
+                "[settings]\nsingle_window_max_width = \"80.5%\"",
+                "settings.single_window_max_width must be 0 (off), between 320 and 16384 px, or a percentage from \"1%\" to \"100%\", got \"80.5%\"",
+            ),
+            (
+                "[settings]\nsingle_window_max_width = \"1680\"",
+                "settings.single_window_max_width must be 0 (off), between 320 and 16384 px, or a percentage from \"1%\" to \"100%\", got \"1680\"",
+            ),
+            (
+                "[settings]\nsingle_window_max_width = 0.8",
+                "settings.single_window_max_width must be 0 (off), between 320 and 16384 px, or a percentage from \"1%\" to \"100%\", got 0.8",
             ),
         ] {
             let error = Config::parse(&format!("version = 1\n{source}\n")).unwrap_err();
@@ -1135,6 +1154,30 @@ right = 128
         }
         assert!(Config::parse("version = 1\n[settings.gaps]\nouter = 4\n").is_err());
         assert!(Config::parse("version = 1\n[settings.gaps]\ninner = 1.5\n").is_err());
+    }
+
+    #[test]
+    fn single_window_max_width_takes_points_or_a_percentage() {
+        let width = |source: &str| {
+            Config::parse(&format!("version = 1\n[settings]\n{source}\n"))
+                .unwrap()
+                .spacing()
+                .single_window_max_width
+        };
+        assert_eq!(width("single_window_max_width = 0"), SingleWidth::Off);
+        assert_eq!(width("single_window_max_width = 1680").to_string(), "1680");
+        assert_eq!(
+            width("single_window_max_width = \"80%\"").to_string(),
+            "80%"
+        );
+        assert_eq!(width("single_window_max_width = \"1%\"").to_string(), "1%");
+        assert_eq!(
+            width("single_window_max_width = \"100%\"").to_string(),
+            "100%"
+        );
+        assert!(
+            Config::parse("version = 1\n[settings]\nsingle_window_max_width_pct = 80\n").is_err()
+        );
     }
 
     #[test]
@@ -1155,7 +1198,7 @@ right = 128
             .unwrap();
         assert_eq!(saved.spacing().inner, 6);
         assert_eq!(saved.spacing().left, 20);
-        assert_eq!(saved.spacing().single_window_max_width, 1440);
+        assert_eq!(saved.spacing().single_window_max_width.to_string(), "1440");
         drop(std::fs::remove_dir_all(dir));
     }
 

@@ -152,6 +152,8 @@ mod tests {
             "General/general-setup",
             "Layout/layout",
             "Layout/layout-spaced",
+            "Layout/layout-percent",
+            "Layout/layout-points",
             "Rules/rules",
             "Rules/rules-drag",
             "Rules/rules-add",

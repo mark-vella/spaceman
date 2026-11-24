@@ -13,7 +13,8 @@ update_channel = "stable"
 # "display" (only when focus lands on another display), or "window" (every focus change).
 # mouse_follows_focus = "off"
 # Center a window that is alone on its display (or in Fullscreen Layout) at this width;
-# 0 (the default) lets it fill the display. 320 through 16384 points.
+# 0 (the default) lets it fill the display. 320 through 16384 points, or a share of the
+# display's padded width from "1%" to "100%", such as "80%".
 single_window_max_width = 0
 
 # Optional spacing in points, all 0 by default: inner (0-48) between tiled windows, and

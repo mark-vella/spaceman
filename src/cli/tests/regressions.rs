@@ -350,3 +350,82 @@ fn config_show_includes_shortcuts_and_labs_in_toml_and_json() {
     assert!(plain_json.get("labs").is_none());
     assert!(plain_json.get("shortcuts").is_none());
 }
+
+#[test]
+fn config_sets_and_gets_the_single_window_width_as_points_or_a_percentage() {
+    let temp = TempConfig::new("single-width");
+    temp.write("# Mine.\nversion = 1\n[settings]\n# Wide.\nsingle_window_max_width = 1680\n");
+    let get = |json: bool| {
+        let args: &[&str] = if json {
+            &["config", "get", "single_window_max_width", "--json"]
+        } else {
+            &["config", "get", "single_window_max_width"]
+        };
+        temp.run(args).stdout.unwrap()
+    };
+    let shown = || -> Value {
+        serde_json::from_str(&temp.run(&["config", "show", "--json"]).stdout.unwrap()).unwrap()
+    };
+    assert_eq!(get(false), "1680");
+    assert_eq!(
+        serde_json::from_str::<Value>(&get(true)).unwrap()["value"],
+        1680
+    );
+    assert_eq!(shown()["settings"]["single_window_max_width"], 1680);
+
+    let set = temp.run(&["config", "set", "single_window_max_width", "80%"]);
+    assert_eq!(
+        set.stdout.as_deref(),
+        Some("set single_window_max_width = 80%")
+    );
+    assert!(
+        temp.read().contains("single_window_max_width = \"80%\""),
+        "{}",
+        temp.read()
+    );
+    assert_eq!(get(false), "80%");
+    assert_eq!(
+        serde_json::from_str::<Value>(&get(true)).unwrap()["value"],
+        "80%"
+    );
+    assert_eq!(shown()["settings"]["single_window_max_width"], "80%");
+    let effective = temp.run(&["config", "show"]).stdout.unwrap();
+    assert!(
+        effective.contains("single_window_max_width = \"80%\""),
+        "{effective}"
+    );
+
+    let set = temp.run(&["config", "set", "settings.single_window_max_width", "1920"]);
+    assert_eq!(set.exit_code, 0, "{:?}", set.stderr);
+    assert!(
+        temp.read().contains("single_window_max_width = 1920"),
+        "{}",
+        temp.read()
+    );
+    assert_eq!(shown()["settings"]["single_window_max_width"], 1920);
+
+    for bad in ["0%", "101%", "80.5%", "wide", "300"] {
+        let refused = temp.run(&["config", "set", "single_window_max_width", bad]);
+        assert_eq!(refused.exit_code, 1, "{bad}");
+        assert!(
+            refused.stderr.unwrap().contains(
+                "settings.single_window_max_width must be 0 (off), between 320 and 16384 px, \
+                 or a percentage from \"1%\" to \"100%\""
+            ),
+            "{bad}"
+        );
+    }
+
+    assert_eq!(
+        temp.run(&["config", "set", "single_window_max_width", "0"])
+            .exit_code,
+        0
+    );
+    assert!(
+        !temp.read().contains("single_window_max_width"),
+        "{}",
+        temp.read()
+    );
+    assert_eq!(get(false), "0");
+    assert_eq!(shown()["settings"]["single_window_max_width"], 0);
+}

@@ -17,7 +17,7 @@ const DISPLAY: Rect = Rect {
     height: 800,
 };
 /// A 21:9 ultrawide, where the single-window width shows.
-const ULTRAWIDE: Rect = Rect {
+pub(super) const ULTRAWIDE: Rect = Rect {
     x: 0,
     y: 0,
     width: 3440,
@@ -81,7 +81,7 @@ pub(super) fn card(p: Paint, spacing: Spacing) -> El {
             DISPLAY_WIDTH,
             &three_tiles(spacing, DISPLAY),
         ));
-    if spacing.single_window_max_width > 0 {
+    if !spacing.single_window_max_width.is_off() {
         displays = displays.child(display(
             p,
             "single",
