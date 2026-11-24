@@ -9,7 +9,7 @@ use spaceman::{
 use super::{
     Outcome,
     document::{
-        ConfigDoc, EffectiveSettings, LabsDoc, RuleView, ShortcutsDoc, WorkspaceDoc,
+        ConfigDoc, DisplayDoc, EffectiveSettings, LabsDoc, RuleView, ShortcutsDoc, WorkspaceDoc,
         resolve_config_path, to_json_pretty,
     },
     help,
@@ -31,6 +31,7 @@ struct ShowOutput {
     labs: Option<LabsDoc>,
     rules: Vec<RuleView>,
     workspaces: Vec<WorkspaceDoc>,
+    displays: Vec<DisplayDoc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     shortcuts: Option<ShortcutsDoc>,
 }
@@ -170,6 +171,7 @@ fn run_show(args: &[&str], path_override: Option<&Path>) -> Result<String, Strin
             labs: doc.labs,
             rules,
             workspaces: doc.workspaces,
+            displays: doc.displays,
             shortcuts: doc.shortcuts,
         })
     } else {

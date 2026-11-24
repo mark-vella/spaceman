@@ -15,6 +15,7 @@ mod memory;
 mod minimums;
 mod move_workspace;
 mod parking;
+mod per_display;
 mod reconciliation;
 mod reconnect_unsettled;
 mod reliability;

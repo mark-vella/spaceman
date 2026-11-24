@@ -270,12 +270,17 @@ fn to_json(value: impl Serialize) -> Result<String, String> {
         .map_err(|error| format!("failed to encode output: {error}"))
 }
 
-/// The probes tile like the agent: with `config.toml`'s spacing, or none when it can't be read.
+/// The probes tile the main display like the agent: with `config.toml`'s spacing there, or none
+/// when it can't be read.
 #[cfg(target_os = "macos")]
 fn configured_spacing() -> spaceman::spacing::Spacing {
-    spaceman::config::Config::load()
-        .map(|config| config.spacing())
-        .unwrap_or_default()
+    let Ok(config) = spaceman::config::Config::load() else {
+        return spaceman::spacing::Spacing::default();
+    };
+    match spaceman::macos::outputs() {
+        Ok(outputs) => config.spacing_on(|selector| outputs.selects(selector, outputs.main())),
+        Err(_) => config.spacing(),
+    }
 }
 
 #[cfg(target_os = "macos")]

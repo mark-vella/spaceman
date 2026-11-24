@@ -8,6 +8,10 @@ use crate::{
     spacing::{Spacing, SpacingKey},
 };
 
+mod displays;
+
+pub use displays::DisplayOverride;
+
 #[derive(Clone, Copy, Debug)]
 struct AppSettings {
     hud: bool,
@@ -140,6 +144,7 @@ pub struct Config {
     labs: LabsConfig,
     rules: Vec<WindowRule>,
     workspace_monitors: Vec<(WorkspaceId, DisplaySelector)>,
+    displays: Vec<DisplayOverride>,
     shortcuts: Shortcuts,
 }
 
@@ -177,6 +182,8 @@ struct RawConfig {
     rules: Vec<RawWindowRule>,
     #[serde(default)]
     workspaces: Vec<RawWorkspace>,
+    #[serde(default)]
+    displays: Vec<displays::RawDisplay>,
     #[serde(default)]
     shortcuts: RawShortcuts,
 }
@@ -332,6 +339,7 @@ impl Config {
             labs: raw.labs,
             rules,
             workspace_monitors,
+            displays: displays::parse(raw.displays)?,
             shortcuts,
         })
     }
@@ -555,6 +563,9 @@ struct EditableConfig {
     rules: Vec<EditableRule>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     workspaces: Vec<EditableWorkspace>,
+    /// Carried through untouched, in file order; editing a workspace never changes a display.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    displays: Vec<toml::Table>,
     /// Carried through untouched; this editor never changes shortcuts (Settings › Shortcuts
     /// edits them in place with `toml_edit`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -569,6 +580,7 @@ impl Default for EditableConfig {
             labs: None,
             rules: Vec::new(),
             workspaces: Vec::new(),
+            displays: Vec::new(),
             shortcuts: None,
         }
     }

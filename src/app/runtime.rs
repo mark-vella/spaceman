@@ -149,7 +149,9 @@ impl<B: WorkspaceBackend> WorkspaceRuntime<B> {
     /// Rules apply to windows from now on; named workspaces and display assignments update.
     /// New named workspaces get their hotkeys at the next restart.
     pub(super) fn replace_config(&mut self, config: Config) {
-        if config.spacing() != self.config.spacing() {
+        if config.spacing() != self.config.spacing()
+            || config.display_overrides() != self.config.display_overrides()
+        {
             self.exact_spacing_workspaces.extend(WorkspaceId::all());
         }
         config.configure_workspaces(&mut self.workspaces);
@@ -352,7 +354,7 @@ impl<B: WorkspaceBackend> WorkspaceRuntime<B> {
         });
         let persisted_workspace_state = workspaces.state();
         let manual_floating = super::commands::restored_floating(&workspaces);
-        let has_spacing = !config.spacing().is_none();
+        let has_spacing = !config.spacing().is_none() || !config.display_overrides().is_empty();
         Self {
             backend,
             scope,

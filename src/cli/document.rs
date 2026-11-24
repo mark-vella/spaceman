@@ -27,6 +27,9 @@ pub(crate) struct ConfigDoc {
     pub rules: Vec<RuleDoc>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub workspaces: Vec<WorkspaceDoc>,
+    /// `[[displays]]`, carried through in file order: no CLI command edits it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub displays: Vec<DisplayDoc>,
     /// `[shortcuts]`, carried through untouched: no CLI command edits it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shortcuts: Option<ShortcutsDoc>,
@@ -58,6 +61,7 @@ impl Default for ConfigDoc {
             labs: None,
             rules: Vec::new(),
             workspaces: Vec::new(),
+            displays: Vec::new(),
             shortcuts: None,
         }
     }
@@ -223,6 +227,15 @@ pub(crate) struct WorkspaceDoc {
     pub monitor: String,
 }
 
+/// One `[[displays]]` entry as written.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DisplayDoc {
+    pub monitor: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub single_window_max_width: Option<i64>,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct EffectiveSettings {
     pub hud: bool,
@@ -276,6 +289,8 @@ struct EffectiveConfigToml<'a> {
     rules: &'a [RuleDoc],
     #[serde(skip_serializing_if = "<[WorkspaceDoc]>::is_empty")]
     workspaces: &'a [WorkspaceDoc],
+    #[serde(skip_serializing_if = "<[DisplayDoc]>::is_empty")]
+    displays: &'a [DisplayDoc],
     #[serde(skip_serializing_if = "Option::is_none")]
     shortcuts: Option<&'a ShortcutsDoc>,
 }
@@ -330,6 +345,7 @@ impl ConfigDoc {
             labs: self.labs,
             rules: &self.rules,
             workspaces: &self.workspaces,
+            displays: &self.displays,
             shortcuts: self.shortcuts.as_ref(),
         };
         let rendered = toml::to_string_pretty(&view)

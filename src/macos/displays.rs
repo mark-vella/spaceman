@@ -93,6 +93,14 @@ impl DisplayOutputs {
         }
     }
 
+    /// Whether `selector` picks `display` itself, with no fallback to main: how a
+    /// `[[displays]]` entry finds the displays it applies to.
+    #[must_use]
+    pub fn selects(&self, selector: &DisplaySelector, display: &DisplayOutput) -> bool {
+        self.resolve_exact(selector)
+            .is_some_and(|picked| picked.id == display.id)
+    }
+
     #[must_use]
     pub fn resolve(&self, selector: &DisplaySelector) -> &DisplayOutput {
         self.resolve_exact(selector).unwrap_or_else(|| self.main())

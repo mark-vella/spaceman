@@ -111,9 +111,14 @@ impl SpacingKey {
         }
     }
 
-    /// `value` as this setting accepts it, or why it doesn't.
+    /// `value` as this setting accepts it under `[settings]`, or why it doesn't.
     pub fn check(self, value: i64) -> Result<i32, String> {
-        let key = self.path();
+        self.check_at("settings.", value)
+    }
+
+    /// [`SpacingKey::check`] for the key where `at` names it, such as `settings.`.
+    pub fn check_at(self, at: &str, value: i64) -> Result<i32, String> {
+        let key = format!("{at}{}", self.path());
         let max = match self {
             Self::Inner => INNER_MAX,
             Self::Top | Self::Bottom | Self::Left | Self::Right => EDGE_MAX,
@@ -124,7 +129,7 @@ impl SpacingKey {
                     return Ok(value as i32);
                 }
                 return Err(format!(
-                    "settings.{key} must be 0 (off) or between {} and {MAX_WIDTH_LIMIT} px, got {value}",
+                    "{key} must be 0 (off) or between {} and {MAX_WIDTH_LIMIT} px, got {value}",
                     MIN_USABLE.0
                 ));
             }
@@ -132,9 +137,7 @@ impl SpacingKey {
         if (0..=i64::from(max)).contains(&value) {
             Ok(value as i32)
         } else {
-            Err(format!(
-                "settings.{key} must be between 0 and {max} px, got {value}"
-            ))
+            Err(format!("{key} must be between 0 and {max} px, got {value}"))
         }
     }
 }
